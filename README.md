@@ -42,5 +42,6 @@ VF functional category prediction
 ![Graphical Abstract](https://github.com/user-attachments/assets/d23d7f50-0f74-4be6-8527-60010847b4d7)
 
 
+![BioFuse-VF_framework](https://github.com/user-attachments/assets/693e4cff-8599-422f-92f9-2dd19295d26a)
 
 
