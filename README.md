@@ -39,6 +39,8 @@ MLP classifier
 VF functional category prediction
 
 
+![Graphical Abstract](https://github.com/user-attachments/assets/d23d7f50-0f74-4be6-8527-60010847b4d7)
+
 
 
 
