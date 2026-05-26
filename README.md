@@ -4,7 +4,9 @@ BioFuse-VF is a dual-branch deep learning framework designed for the multi-class
 
 Most existing computational methods mainly focus on binary VF prediction, that is, distinguishing VFs from non-VFs. However, binary classification cannot reveal the specific functional roles of VFs in different infection stages. To address this limitation, BioFuse-VF integrates ProtT5-derived semantic embeddings and AAindex-derived physicochemical descriptors to improve fine-grained multi-class VF functional classification, especially under class-imbalanced conditions.
 
-![BioFuse-VF_framework](https://github.com/user-attachments/assets/8cfc282e-8ccd-456a-a091-94b485b4c45f)
+<p align="center">
+  <img src="./BioFuse-VF_framework.png" width="850">
+</p>
 
 
 
