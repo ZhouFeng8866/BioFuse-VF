@@ -2,7 +2,6 @@ import os
 import torch
 import pandas as pd
 import numpy as np
-
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import confusion_matrix
 
@@ -10,35 +9,37 @@ from model import BioFuseVF
 from utils import calculate_metrics, viz_conf_matrix
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"{'GPU' if device.type == 'cuda' else 'CPU'} Available")
 
 
-def main():
-    batch_size = 64
-    num_classes = 7
-
-    model_save_path = './checkpoints'
-
-    test_aaindex = torch.load('./data/aaindex/test_aaindex_pca12.pt')
-    test_protT5 = torch.load('./data/embedding/test_prot_t5.pt')
+def load_test_data():
+    test_aaindex = torch.load("./data/aaindex/test_aaindex_pca12.pt")
+    test_protT5 = torch.load("./data/embedding/test_prot_t5.pt")
 
     test_label = test_aaindex[:, 0].long()
     test_aaindex_feat = test_aaindex[:, 1:]
     test_protT5_feat = test_protT5[:, 1:]
 
-    results_df = pd.read_csv(os.path.join(model_save_path, 'cv_results.csv'))
-    best_fold_idx = results_df['MCC'].idxmax() + 1
+    return test_aaindex_feat, test_protT5_feat, test_label
 
-    print(f"Using model from Fold {best_fold_idx}")
+
+def evaluate():
+    batch_size = 64
+    num_classes = 7
+
+    model_path = "./checkpoints/best_model.pt"
+    result_save_path = "./results"
+
+    os.makedirs(result_save_path, exist_ok=True)
+
+    test_aaindex_feat, test_protT5_feat, test_label = load_test_data()
+
+    print(f"Test: {test_aaindex_feat.shape}, {test_protT5_feat.shape}, Labels: {test_label.shape}")
+    print(f"Label distribution - Test: {torch.bincount(test_label)}")
 
     model = BioFuseVF(num_classes=num_classes)
-    model.load_state_dict(
-        torch.load(
-            os.path.join(model_save_path, f'best_model_fold{best_fold_idx}.pt'),
-            map_location=device
-        )
-    )
-
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
 
@@ -46,7 +47,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     test_preds = []
-    test_labels_list = []
+    test_labels = []
     test_probs = []
 
     with torch.no_grad():
@@ -60,60 +61,88 @@ def main():
             preds = torch.argmax(logits, dim=1)
 
             test_preds.extend(preds.cpu().numpy())
-            test_labels_list.extend(labels.cpu().numpy())
+            test_labels.extend(labels.cpu().numpy())
             test_probs.extend(probs.cpu().numpy())
 
     test_metrics = calculate_metrics(
-        np.array(test_labels_list),
+        np.array(test_labels),
         np.array(test_preds),
         np.array(test_probs),
         num_classes=num_classes,
         verbose=True,
-        prefix="Independent Test Set"
+        prefix="Test Set"
     )
 
     print("\nTest Set Summary:")
-    print(f"  Macro-F1:    {test_metrics['Macro_F1']:.4f}")
-    print(f"  Weighted-F1: {test_metrics['Weighted_F1']:.4f}")
-    print(f"  MCC:         {test_metrics['MCC']:.4f}")
+    print(f"  Balanced Acc (Macro-Recall): {test_metrics['Balanced_Acc (Macro-Recall)']:.4f}")
+    print(f"  MCC:                          {test_metrics['MCC']:.4f}")
+    print(f"  Weighted F1:                  {test_metrics['Weighted_F1']:.4f}")
+    print(f"  Macro F1:                     {test_metrics['Macro_F1']:.4f}")
+    print(f"  Weighted AUROC:               {test_metrics['Weighted_AUROC']:.4f}")
+    print(f"  Weighted AUPRC:               {test_metrics['Weighted_AUPRC']:.4f}")
+    print(f"  Macro AUROC:                  {test_metrics['Macro_AUROC']:.4f}")
+    print(f"  Macro AUPRC:                  {test_metrics['Macro_AUPRC']:.4f}")
 
-    cm = confusion_matrix(test_labels_list, test_preds)
+    cm = confusion_matrix(test_labels, test_preds)
 
     labels = [
-        'VFC0272',
-        'VFC0001',
-        'VFC0086',
-        'VFC0204',
-        'VFC0235',
-        'VFC0258',
-        'VFC0271'
+        "Nutritional/Metabolic",
+        "Adherence",
+        "Effector delivery",
+        "Motility",
+        "Exotoxin",
+        "Immune modulation",
+        "Biofilm"
     ]
-
-    os.makedirs('./results', exist_ok=True)
 
     viz_conf_matrix(
         cm,
         labels,
-        figsize=(10, 8),
-        filename='./results/confusion_matrix_test.png',
+        figsize=(12, 10),
+        filename=os.path.join(result_save_path, "confusion_matrix_test.png"),
         show_counts=True
     )
 
-    summary_df = pd.DataFrame([{
-        'Macro_F1': test_metrics['Macro_F1'],
-        'Weighted_F1': test_metrics['Weighted_F1'],
-        'MCC': test_metrics['MCC'],
-        'Macro_AUROC': test_metrics['Macro_AUROC'],
-        'Macro_AUPRC': test_metrics['Macro_AUPRC'],
-        'Weighted_AUROC': test_metrics['Weighted_AUROC'],
-        'Weighted_AUPRC': test_metrics['Weighted_AUPRC']
-    }])
+    print(f"\nConfusion matrix saved to {os.path.join(result_save_path, 'confusion_matrix_test.png')}")
 
-    summary_df.to_csv('./results/final_test_summary.csv', index=False)
+    metric_columns = [
+        "Balanced_Acc (Macro-Recall)",
+        "MCC",
+        "Weighted_Precision",
+        "Weighted_Recall (Accuracy)",
+        "Weighted_F1",
+        "Weighted_AUROC",
+        "Weighted_AUPRC",
+        "Macro_F1",
+        "Macro_AUROC",
+        "Macro_AUPRC"
+    ]
 
-    print("\nFinal test results saved to ./results/final_test_summary.csv")
-    print("Confusion matrix saved to ./results/confusion_matrix_test.png")
+    summary_data = []
+    for metric in metric_columns:
+        summary_data.append({
+            "Metric": metric,
+            "Test Set": f"{test_metrics[metric]:.4f}"
+        })
+
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_csv(os.path.join(result_save_path, "test_summary.csv"), index=False)
+
+    prediction_df = pd.DataFrame({
+        "true_label": test_labels,
+        "pred_label": test_preds
+    })
+
+    probs_array = np.array(test_probs)
+    for i in range(num_classes):
+        prediction_df[f"prob_class_{i}"] = probs_array[:, i]
+
+    prediction_df.to_csv(os.path.join(result_save_path, "prediction_results.csv"), index=False)
+
+    print(f"Test summary saved to {os.path.join(result_save_path, 'test_summary.csv')}")
+    print(f"Prediction results saved to {os.path.join(result_save_path, 'prediction_results.csv')}")
+    print("\nAll Done!")
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    evaluate()
